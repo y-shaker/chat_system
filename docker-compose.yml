@@ -1,0 +1,105 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    command: ./entrypoint.sh
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_USERNAME: root
+      DATABASE_PASSWORD: password
+      DATABASE_NAME: chat_system_development
+      REDIS_URL: redis://redis:6379/0
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    volumes:
+      - .:/app
+      - bundle_data:/bundle
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: chat_system_development
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+
+  redis:
+    image: redis:7
+    container_name: redis_server
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+  
+  sidekiq:
+    build: .
+    container_name: sidekiq_worker
+    command: bundle exec sidekiq
+    volumes:
+      - .:/app
+      - bundle_data:/bundle
+    environment:
+      - RAILS_ENV=development
+      - DATABASE_HOST=mysql
+      - DATABASE_USERNAME=root
+      - DATABASE_PASSWORD=password
+      - DATABASE_NAME=chat_system_development
+      - REDIS_URL=redis://redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ENABLE_SIDEKIQ_CRON=true
+    depends_on:
+      - mysql
+      - redis
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch_server
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  go_gateway:
+    build:
+      context: ./go_gateway
+    container_name: go_gateway
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_URL: redis:6379
+      GO_GATEWAY_PORT: 8081
+    depends_on:
+      - redis
+    networks:
+      - default
+
+
+
+volumes:
+  mysql_data:
+  redis_data:
+  bundle_data:
+  es_data:
