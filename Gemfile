@@ -8,7 +8,7 @@ gem "mysql2", "~> 0.5.7"
 
 gem "redis", "~> 5.2"
 gem "sidekiq"
-gem "sidekiq-cron", "~> 1.12"
+gem "sidekiq-cron", "~> 2.3"
 
 gem "elasticsearch", "~> 8.0"
 gem "elasticsearch-model", "~> 8.0"
