@@ -6,6 +6,9 @@ class Application < ApplicationRecord
 
   before_validation :ensure_token, on: :create
 
+  after_create  { $redis.sadd("applications_set", token) }
+  after_destroy { $redis.srem("applications_set", token) }
+
   def as_json(options = {})
     super({
       only: [:token, :name, :chats_count, :created_at]

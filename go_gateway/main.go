@@ -59,16 +59,26 @@ func main() {
 func handleCreateChat(c *fiber.Ctx) error {
 	appToken := c.Params("token")
 
+	// Check application exists
+	exists, err := redisClient.SIsMember(ctx, "applications_set", appToken).Result()
+	if err != nil {
+		log.Printf("[Go Gateway] Redis error checking app: %v", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Internal server error"})
+	}
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{"error": fmt.Sprintf("Application %s not found", appToken)})
+	}
+
 	var body struct {
 		Title string `json:"title"`
 	}
 
-    if len(c.Body()) > 0 {
-        if err := c.BodyParser(&body); err != nil {
-            log.Printf("[Go Gateway] Failed to parse body: %v", err)
-            return c.Status(422).JSON(fiber.Map{"error": "Invalid JSON body"})
-        }
-    }
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&body); err != nil {
+			log.Printf("[Go Gateway] Failed to parse body: %v", err)
+			return c.Status(422).JSON(fiber.Map{"error": "Invalid JSON body"})
+		}
+	}
 
 	// Atomic unique chat number per app
 	seqKey := fmt.Sprintf("app:%s:chats_seq", appToken)
@@ -76,6 +86,13 @@ func handleCreateChat(c *fiber.Ctx) error {
 	if err != nil {
 		log.Printf("[Go Gateway] Redis INCR failed for chat: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate chat number"})
+	}
+
+	// Add chat number to Redis set for this application
+	chatSetKey := fmt.Sprintf("app:%s:chats_set", appToken)
+	if err := redisClient.SAdd(ctx, chatSetKey, chatNumber).Err(); err != nil {
+		log.Printf("[Go Gateway] Failed to add chat #%d to Redis set: %v", chatNumber, err)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update chat set in Redis"})
 	}
 
 	title := body.Title
@@ -102,7 +119,7 @@ func handleCreateChat(c *fiber.Ctx) error {
 
 	return c.Status(202).JSON(fiber.Map{
 		"number": chatNumber,
-		"title": title,
+		"title":  title,
 	})
 }
 
@@ -112,6 +129,26 @@ func handleCreateChat(c *fiber.Ctx) error {
 func handleCreateMessage(c *fiber.Ctx) error {
 	appToken := c.Params("token")
 	chatNumStr := c.Params("number")
+
+	// Check application exists
+	exists, err := redisClient.SIsMember(ctx, "applications_set", appToken).Result()
+	if err != nil {
+		log.Printf("[Go Gateway] Redis error checking app: %v", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Internal server error"})
+	}
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{"error": fmt.Sprintf("Application %s not found", appToken)})
+	}
+
+	// Check chat exists
+	exists, err = redisClient.SIsMember(ctx, fmt.Sprintf("app:%s:chats_set", appToken), chatNumStr).Result()
+	if err != nil {
+		log.Printf("[Go Gateway] Redis error checking chat: %v", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Internal server error"})
+	}
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{"error": fmt.Sprintf("Chat #%s not found for application %s", chatNumStr, appToken)})
+	}
 
 	chatNum, err := strconv.Atoi(chatNumStr)
 	if err != nil {
