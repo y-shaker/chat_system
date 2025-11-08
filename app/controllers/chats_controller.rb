@@ -15,17 +15,6 @@ class ChatsController < ApplicationController
     render json: @chat
   end
 
-  # POST /applications/:application_token/chats
-  # This is currently not used as we use Golang layer for message and chat creation requests
-  def create
-    key = "application:#{@application.id}:chats_seq"
-    chat_number = $redis.incr(key)
-
-    ChatCreateWorker.perform_async(@application.id, chat_number, chat_params[:title])
-
-    render json: { number: chat_number }, status: :accepted
-  end
-
   # PUT/PATCH /applications/:application_token/chats/:number
   def update
     if @chat.update(chat_params)

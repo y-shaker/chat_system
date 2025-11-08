@@ -8,10 +8,6 @@ class CreateMessages < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    # enforce uniqueness: each chat has messages numbered starting at 1
     add_index :messages, [:chat_id, :number], unique: true
-
-    # index body for faster scanning (note: actual search will be via ElasticSearch)
-    add_index :messages, :body, type: :fulltext if connection.adapter_name.downcase.include?('mysql')
   end
 end

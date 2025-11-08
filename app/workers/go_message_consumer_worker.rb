@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 require 'json'
 require 'redis'
 
@@ -15,7 +14,6 @@ class GoMessageConsumerWorker
 
     loop do
       begin
-        # BLPOP blocks until a new message arrives
         _, raw_message = redis.blpop(REDIS_QUEUE_KEY, timeout: 0)
         payload = JSON.parse(raw_message)
 
@@ -45,7 +43,6 @@ class GoMessageConsumerWorker
     chat = application.chats.find_by(number: chat_number)
     return unless chat
 
-    # Create the message (idempotent)
     message = chat.messages.find_or_initialize_by(number: number)
     message.body = message_body
     message.save!
