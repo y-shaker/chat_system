@@ -27,7 +27,7 @@ group :development, :test do
   gem "factory_bot_rails"
   gem "faker"
   gem "database_cleaner-active_record"
-  gem "shoulda-matchers", "~> 6.0"
+  gem "shoulda-matchers", "~> 7.0"
 
   gem "debug", platforms: %i[mri windows], require: "debug/prelude"
   gem "brakeman", require: false
