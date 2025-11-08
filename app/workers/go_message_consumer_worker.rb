@@ -46,6 +46,7 @@ class GoMessageConsumerWorker
     message = chat.messages.find_or_initialize_by(number: number)
     message.body = message_body
     message.save!
+    Rails.cache.delete("chat:#{chat.id}:messages")
 
     # Index in Elasticsearch
     message.__elasticsearch__.index_document if message.respond_to?(:__elasticsearch__)

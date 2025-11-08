@@ -1,12 +1,12 @@
 class ChatsController < ApplicationController
-  before_action :set_application
-  before_action :set_chat, only: [:show, :update, :destroy]
+  before_action :set_chat_context, only: [:show, :update, :destroy]
+  before_action :set_application, only: [:index]
   rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
   rescue_from ActionController::ParameterMissing, with: :missing_params
 
   # GET /applications/:application_token/chats
   def index
-    @chats = @application.chats
+    @chats = @application.chats.select(:number, :title, :messages_count, :created_at)
     render json: @chats
   end
 
@@ -15,7 +15,7 @@ class ChatsController < ApplicationController
     render json: @chat
   end
 
-  # PUT/PATCH /applications/:application_token/chats/:number
+  # PUT/PATCH /applications/:application_token/chats/:chat_number
   def update
     if @chat.update(chat_params)
       render json: @chat
@@ -24,7 +24,7 @@ class ChatsController < ApplicationController
     end
   end
 
-  # DELETE /applications/:application_token/chats/:number
+  # DELETE /applications/:application_token/chats/:chat_number
   def destroy
     @chat.destroy
     head :no_content
@@ -32,16 +32,20 @@ class ChatsController < ApplicationController
 
   private
 
-  def set_application
-    @application = Application.find_by!(token: params[:application_token])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: "Application not found" }, status: :not_found
+  def set_chat_context
+    Rails.logger.info("Fetching chat number=#{params[:number]} for app_token=#{params[:application_token]}")
+    @chat = Chat.joins(:application)
+                .includes(:application)
+                .select('chats.*')
+                .find_by!(
+                  number: params[:number],
+                  applications: { token: params[:application_token] }
+                )
+    @application = @chat.application
   end
 
-  def set_chat
-    @chat = @application.chats.find_by!(number: params[:number])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: "Chat not found" }, status: :not_found
+  def set_application
+    @application = Application.find_by!(token: params[:application_token])
   end
 
   def chat_params

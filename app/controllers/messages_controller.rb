@@ -1,13 +1,12 @@
 class MessagesController < ApplicationController
-  before_action :set_application
-  before_action :set_chat
-  before_action :set_message, only: [:show, :update, :destroy]
+  before_action :set_message_context, only: [:show, :update, :destroy]
+  before_action :set_chat_context, only: [:index, :search]
   rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
   rescue_from ActionController::ParameterMissing, with: :missing_params
 
   # GET /applications/:application_token/chats/:chat_number/messages
   def index
-    @messages = @chat.messages
+    @messages = @chat.messages.select(:number, :body, :created_at)
     render json: @messages
   end
 
@@ -33,26 +32,17 @@ class MessagesController < ApplicationController
 
   def search
     query = params[:q]
-    
     return render json: { error: 'Search query is required' }, status: :bad_request if query.blank?
-
-    Rails.logger.info "[MessagesController#search] Searching for '#{query}' in chat #{@chat.id}"
 
     begin
       results = Message.search(
         query: {
           bool: {
-            must: [
-              { match: { body: query } }
-            ],
-            filter: [
-              { term: { chat_id: @chat.id } }
-            ]
+            must: [{ match: { body: query } }],
+            filter: [{ term: { chat_id: @chat.id } }]
           }
         }
       )
-
-      Rails.logger.info "[MessagesController#search] Found #{results.results.total} results"
 
       render json: results.records
     rescue => e
@@ -63,22 +53,31 @@ class MessagesController < ApplicationController
 
   private
 
-  def set_application
-    @application = Application.find_by!(token: params[:application_token])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Application not found' }, status: :not_found
+  # Single query chain Application → Chat → Message
+  def set_message_context
+    @message = Message
+      .joins(chat: :application)
+      .includes(chat: :application)
+      .select('messages.*')
+      .find_by!(
+        number: params[:number],
+        chats: { number: params[:chat_number] },
+        applications: { token: params[:application_token] }
+      )
+
+    @chat = @message.chat
+    @application = @chat.application
   end
 
-  def set_chat
-    @chat = @application.chats.find_by!(number: params[:chat_number])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Chat not found' }, status: :not_found
-  end
-
-  def set_message
-    @message = @chat.messages.find_by!(number: params[:number])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Message not found' }, status: :not_found
+  def set_chat_context
+    @chat = Chat.joins(:application)
+                .includes(:application)
+                .select('chats.*')
+                .find_by!(
+                  number: params[:chat_number],
+                  applications: { token: params[:application_token] }
+                )
+    @application = @chat.application
   end
 
   def message_params

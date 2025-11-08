@@ -62,9 +62,13 @@ func handleCreateChat(c *fiber.Ctx) error {
 	var body struct {
 		Title string `json:"title"`
 	}
-	if err := c.BodyParser(&body); err != nil {
-		log.Printf("[Go Gateway] Failed to parse body: %v", err)
-	}
+
+    if len(c.Body()) > 0 {
+        if err := c.BodyParser(&body); err != nil {
+            log.Printf("[Go Gateway] Failed to parse body: %v", err)
+            return c.Status(422).JSON(fiber.Map{"error": "Invalid JSON body"})
+        }
+    }
 
 	// Atomic unique chat number per app
 	seqKey := fmt.Sprintf("app:%s:chats_seq", appToken)
